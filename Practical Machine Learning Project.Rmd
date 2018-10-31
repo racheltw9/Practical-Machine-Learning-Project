@@ -1,0 +1,105 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+
+## The Data
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+
+## Load Libraries
+
+```{r}
+library(caret)
+library(rpart)
+library(randomForest)
+library(ggplot2)
+library(dplyr)
+library(rattle)
+library(rpart.plot)
+library(corrplot)
+library(gbm)
+library(e1071)
+```
+
+## Read the data into R
+
+```{r}
+TrainData = read.csv("~/Desktop/Documents/Movies/Coursera/ML/week4/pml-training.csv")
+TestData = read.csv("~/Desktop/Documents/Movies/Coursera/ML/week4/pml-testing.csv")
+dim(TrainData)
+dim(TestData)
+```
+
+
+## Clean the data
+
+```{r}
+sum(complete.cases(TrainData))
+
+#Remove columns with NA values
+TrainData = TrainData[, colSums(is.na(TrainData)) == 0]
+TestData = TestData[, colSums(is.na(TestData)) == 0]
+classe = TrainData$classe
+dim(TrainData)
+
+#Remove the unnecessary columns for TrainData
+classe = TrainData$classe
+train.remove = grepl("^X|timestamp|window", names(TrainData))
+TrainData = TrainData[, !train.remove]
+TrainCleaned = TrainData[, sapply(TrainData, is.numeric)]
+TrainCleaned$classe = classe
+dim(TrainCleaned)
+
+#Remove the unnecessary columns for TestData
+test.remove = grepl("^X|timestamp|window", names(TestData))
+TestData = TestData[, !test.remove]
+TestCleaned = TestData[, sapply(TestData, is.numeric)]
+dim(TestCleaned)
+
+```
+
+## Data Slicing
+
+```{r}
+# Split the cleaned data 70% into the training set and 30% into the testing set. We will use the test set to conduct cross validation in later steps.
+set.seed(333)
+inTrain = createDataPartition(TrainCleaned$classe, p = 0.7, list = FALSE)
+trainData1 = TrainCleaned[inTrain,]
+testData1 = TrainCleaned[-inTrain,]
+```
+
+## Modeling the data
+
+```{r}
+# We fit a predictive model for activity recognition using Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates and outliers in general. And use 5-fold cross validation when applying the algorithm.
+
+modelRF = train(classe ~ ., data = trainData1, method = "rf", trcontrol = trainControl(method = "cv", 5), ntree = 4)
+modelRF
+
+#Run the model now on the test data set
+predictRF = predict(modelRF, testData1)
+confusionMatrix(predictRF, testData1$classe)
+
+#Compute the estimated accuracy of the model
+accuracy = postResample(predictRF, testData1$classe)
+accuracy
+
+#Compute the estimated out-of-sample-error
+OOSE = 1 - as.numeric(confusionMatrix(predictRF, testData1$classe)$overall[1])
+OOSE
+
+```
+
+
+## Predict on cleaned test data
+
+```{r}
+#Apply the random forest model to the original test data that we cleaned.
+final = predict(modelRF, TestCleaned)
+final 
+```
+
